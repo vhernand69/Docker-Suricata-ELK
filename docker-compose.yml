@@ -15,6 +15,8 @@ services:
     volumes:
       - ./elasticsearch/data:/usr/share/elasticsearch/data
       - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ./wazuh/data:/var/ossec/data
+      - ./suricata/logs:/var/log/suricata:ro  # Compartir logs de Suricata
     ports:
       - "9200:9200"
       - "9300:9300"
@@ -52,6 +54,8 @@ services:
     volumes:
       - ./logstash/pipeline:/usr/share/logstash/pipeline
       - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./wazuh/data:/var/ossec/data
+      - ./suricata/logs:/var/log/suricata:ro  # Compartir logs de Suricata
     ports:
       - "5044:5044"
       - "9600:9600"
@@ -81,8 +85,15 @@ services:
       - INDEXER_URL=http://elasticsearch:9200
       - INDEXER_USERNAME=admin
       - INDEXER_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+      - FILEBEAT_CUSTOM_CONF=/usr/share/filebeat/filebeat.yml
+      - DISABLE_WAZUH_FILEBEAT=true
     volumes:
       - ./wazuh/data:/var/ossec/data
+      - ./suricata/logs:/var/log/suricata:ro  # Compartir logs de Suricata
+      - ./wazuh/filebeat/filebeat_custom.yml:/usr/share/filebeat/filebeat_custom.yml:ro
+      - ./wazuh/config/ossec.conf:/var/ossec/etc/ossec.conf:ro
+      - /var/lib/filebeat/registry:/usr/share/filebeat/data/registry
+      - filebeat-data:/usr/share/filebeat/data
     ports:
       - "1514:1514"
       - "1515:1515"
@@ -94,3 +105,9 @@ services:
 networks:
   blue_team_net:
     driver: bridge
+    
+volumes:
+  filebeat-data:
+    driver: local
+  elasticsearch-data:
+    driver: local
