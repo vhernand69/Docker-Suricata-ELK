@@ -8,3 +8,4 @@ path.logs: /usr/share/elasticsearch/logs
 # Desactivar SSL temporalmente para pruebas (opcional)
 xpack.security.http.ssl:
   enabled: false
+node.max_local_storage_nodes: 2
