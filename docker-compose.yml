@@ -1,121 +1,94 @@
 services:
-  setup:
-    profiles:
-      - setup
-    build:
-      context: setup/
-      args:
-        ELASTIC_VERSION: ${ELASTIC_VERSION}
-    init: true
-    volumes:
-      - ./setup/entrypoint.sh:/entrypoint.sh:ro,Z
-      - ./setup/lib.sh:/lib.sh:ro,Z
-      - ./setup/roles:/roles:ro,Z
-    environment:
-      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
-      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
-      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
-      METRICBEAT_INTERNAL_PASSWORD: ${METRICBEAT_INTERNAL_PASSWORD:-}
-      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
-      HEARTBEAT_INTERNAL_PASSWORD: ${HEARTBEAT_INTERNAL_PASSWORD:-}
-      MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
-      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
-    networks:
-      - blue_team_net 
-    depends_on:
-      - elasticsearch
-
-
-  suricata:
-    image: jasonish/suricata:latest
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-      - SYS_NICE
-    privileged: true
-    volumes:
-      - type: bind
-        source: ./suricata/logs
-        target: /var/log/suricata
-    command: ["suricata", "-i", "enp0s3", "-vvv"]
-    restart: unless-stopped
-
-  wazuh:
-    image: wazuh/wazuh-manager:4.7.0
-    networks:
-      blue_team_net:
-        aliases:
-          - wazuh.indexer
-    volumes:
-      - type: bind
-        source: ./wazuh/data
-        target: /var/ossec/data
-    ports:
-      - "1514:1514/tcp"
-    environment:
-      - INDEXER_URL=https://elasticsearch:9200
-    depends_on:
-      - elasticsearch
-    restart: unless-stopped
-
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.18.1
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.3
+    container_name: elasticsearch
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g
       - bootstrap.memory_lock=true
-      
-    volumes:
-      - type: bind
-        source: ./elasticsearch/data
-        target: /usr/share/elasticsearch/data
-      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
-    ports:
-      - "9200:9200"
-    networks:
-      - blue_team_net
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+      - xpack.security.enabled=false
     ulimits:
       memlock:
         soft: -1
         hard: -1
+    volumes:
+      - ./elasticsearch/data:/usr/share/elasticsearch/data
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - blue_team_net
     restart: unless-stopped
 
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.18.1
-    ports:
-      - "5601:5601"
-    environment:
-      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
-      - SERVER_HOST=0.0.0.0
-      - XPACK_SECURITY_ENABLED=true
-      - ELASTICSEARCH_SERVICEACCOUNTTOKEN=AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS10b2tlbjpRVjNZeEdaQlR1LWZJemxzWXJiY213
-
-    volumes:
-      - ./kibana/config:/usr/share/kibana/config  # Para configuración persistente
-      - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
-    networks:
-      - blue_team_net
+    image: docker.elastic.co/kibana/kibana:7.17.3
+    container_name: kibana
     depends_on:
       - elasticsearch
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_SYSTEM_PASSWORD:-changeme}
+      - SERVER_HOST=0.0.0.0
+    volumes:
+      - ./kibana/config:/usr/share/kibana/config
+    ports:
+      - "5601:5601"
+    networks:
+      - blue_team_net
     restart: unless-stopped
 
   logstash:
-    image: docker.elastic.co/logstash/logstash:8.18.1
-    ports:
-      - "5044:5044/tcp"
-    volumes:
-      - type: bind
-        source: ./logstash/pipeline
-        target: /usr/share/logstash/pipeline
-    environment:
-      LS_JAVA_OPTS: -Xms256m -Xmx256m
-
-    networks:
-      - blue_team_net
+    image: docker.elastic.co/logstash/logstash:7.17.3
+    container_name: logstash
     depends_on:
       - elasticsearch
+    environment:
+      - LS_JAVA_OPTS=-Xms256m -Xmx256m
+      - LOGSTASH_INTERNAL_PASSWORD=${LOGSTASH_INTERNAL_PASSWORD:-changeme}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    networks:
+      - blue_team_net
+    restart: unless-stopped
+
+  suricata:
+    image: jasonish/suricata:latest
+    container_name: suricata
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    command: ["-i", "enp0s3", "-vvv"]
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./suricata/logs:/var/log/suricata
+
+  wazuh:
+    image: wazuh/wazuh-manager:4.7.0
+    container_name: wazuh
+    depends_on:
+      - elasticsearch
+    environment:
+      - INDEXER_URL=http://elasticsearch:9200
+      - INDEXER_USERNAME=admin
+      - INDEXER_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+    volumes:
+      - ./wazuh/data:/var/ossec/data
+    ports:
+      - "1514:1514"
+      - "1515:1515"
+      - "1516:1516"
+    networks:
+      - blue_team_net
     restart: unless-stopped
 
 networks:

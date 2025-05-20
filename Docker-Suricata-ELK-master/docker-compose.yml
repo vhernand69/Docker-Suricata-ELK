@@ -1,0 +1,123 @@
+services:
+  setup:
+    profiles:
+      - setup
+    build:
+      context: setup/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    init: true
+    volumes:
+      - ./setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./setup/lib.sh:/lib.sh:ro,Z
+      - ./setup/roles:/roles:ro,Z
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      METRICBEAT_INTERNAL_PASSWORD: ${METRICBEAT_INTERNAL_PASSWORD:-}
+      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+      HEARTBEAT_INTERNAL_PASSWORD: ${HEARTBEAT_INTERNAL_PASSWORD:-}
+      MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+    networks:
+      - blue_team_net 
+    depends_on:
+      - elasticsearch
+
+
+  suricata:
+    image: jasonish/suricata:latest
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    privileged: true
+    volumes:
+      - type: bind
+        source: ./suricata/logs
+        target: /var/log/suricata
+    command: ["suricata", "-i", "enp0s3", "-vvv"]
+    restart: unless-stopped
+
+  wazuh:
+    image: wazuh/wazuh-manager:4.7.0
+    networks:
+      blue_team_net:
+        aliases:
+          - wazuh.indexer
+    volumes:
+      - type: bind
+        source: ./wazuh/data
+        target: /var/ossec/data
+    ports:
+      - "1514:1514/tcp"
+    environment:
+      - INDEXER_URL=https://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.18.1
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - bootstrap.memory_lock=true
+      
+    volumes:
+      - type: bind
+        source: ./elasticsearch/data
+        target: /usr/share/elasticsearch/data
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+    ports:
+      - "9200:9200"
+    networks:
+      - blue_team_net
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.18.1
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - SERVER_HOST=0.0.0.0
+      - XPACK_SECURITY_ENABLED=true
+      - ELASTICSEARCH_SERVICEACCOUNTTOKEN=AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS10b2tlbjpRVjNZeEdaQlR1LWZJemxzWXJiY213
+
+    volumes:
+      - ./kibana/config:/usr/share/kibana/config  # Para configuración persistente
+      - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+    networks:
+      - blue_team_net
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.18.1
+    ports:
+      - "5044:5044/tcp"
+    volumes:
+      - type: bind
+        source: ./logstash/pipeline
+        target: /usr/share/logstash/pipeline
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+
+    networks:
+      - blue_team_net
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+networks:
+  blue_team_net:
+    driver: bridge
