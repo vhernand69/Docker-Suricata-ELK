@@ -1,9 +1,0 @@
-server.host: "0.0.0.0"
-elasticsearch.hosts: ["http://elasticsearch:9200"]
-elasticsearch.username: "kibana_system"
-elasticsearch.password: "${KIBANA_SYSTEM_PASSWORD}"
-
-# Configuración de seguridad
-xpack.security.encryptionKey: "AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS10b2tlbjpRVjNZeEdaQlR1LWZJemxzWXJiY213"
-xpack.encryptedSavedObjects.encryptionKey: "AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS10b2tlbjpRVjNZeEdaQlR1LWZJemxzWXJiY213"
-xpack.reporting.encryptionKey: "AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS10b2tlbjpRVjNZeEdaQlR1LWZJemxzWXJiY213"
