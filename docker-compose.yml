@@ -70,11 +70,12 @@ services:
       - NET_ADMIN
       - NET_RAW
       - SYS_NICE
-    command: ["-i", "enp0s3", "-vvv"]
+    command: ["-c", "/etc/suricata/suricata.yaml", "-i", "enp0s3", "-vvv"]
     network_mode: host
     restart: unless-stopped
     volumes:
       - ./suricata/logs:/var/log/suricata
+      - ./suricata/config:/etc/suricata
 
   wazuh:
     image: wazuh/wazuh-manager:4.7.0
