@@ -76,9 +76,10 @@ services:
     volumes:
       - ./suricata/logs:/var/log/suricata
       - ./suricata/config:/etc/suricata
+      - ./suricata/rules:/usr/share/suricata/rules
 
   wazuh:
-    image: wazuh/wazuh-manager:4.7.0
+    image: wazuh/wazuh-manager:4.12.0
     container_name: wazuh
     depends_on:
       - elasticsearch
@@ -87,12 +88,13 @@ services:
       - INDEXER_USERNAME=admin
       - INDEXER_PASSWORD=${ELASTIC_PASSWORD:-changeme}
       - FILEBEAT_CUSTOM_CONF=/usr/share/filebeat/filebeat.yml
-      - DISABLE_WAZUH_FILEBEAT=true
+      - DISABLE_WAZUH_FILEBEAT=false
     volumes:
       - ./wazuh/data:/var/ossec/data
-      - ./suricata/logs:/var/log/suricata:ro  # Compartir logs de Suricata
-      - ./wazuh/filebeat/filebeat_custom.yml:/usr/share/filebeat/filebeat_custom.yml:ro
-      - ./wazuh/config/ossec.conf:/var/ossec/etc/ossec.conf:ro
+      - ./suricata/logs:/var/log/suricata  # Compartir logs de Suricata
+      - ./wazuh/config/:/var/ossec/etc/shared
+      - ./wazuh/filebeat/filebeat_custom.yml:/usr/share/filebeat/filebeat_custom.yml
+      - ./wazuh/config/ossec.conf:/var/ossec/etc/ossec.conf
       - /var/lib/filebeat/registry:/usr/share/filebeat/data/registry
       - filebeat-data:/usr/share/filebeat/data
     ports:
